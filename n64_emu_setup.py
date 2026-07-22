@@ -15,15 +15,12 @@ import zipfile
 import subprocess
 import threading
 import shutil
-import tarfile
 import platform
-import re
-import tempfile
 from pathlib import Path
 from datetime import datetime
 from tkinter import (
-    Tk, Frame, Label, Button, Text, Scrollbar, Entry,
-    END, N, S, E, W, DISABLED, NORMAL, messagebox, ttk, filedialog
+    Tk, Frame, Label, Button, Text, Scrollbar,
+    END, DISABLED, NORMAL, messagebox, ttk, filedialog
 )
 
 # ─── Configuration ────────────────────────────────────────────────
@@ -37,10 +34,6 @@ SETTINGS_FILE = BASE_DIR / "settings.json"
 LOG_FILE = BASE_DIR / "setup.log"
 ICON_FILE = BASE_DIR / "assets" / "n64_icon.ico"
 ICON_PNG = BASE_DIR / "assets" / "n64_icon.png"
-
-# GitHub release info for Simple64
-SIMPLE64_REPO = "simple64/simple64"
-SIMPLE64_API = f"https://api.github.com/repos/{SIMPLE64_REPO}/releases/latest"
 
 SYSTEM = platform.system().lower()
 IS_WINDOWS = SYSTEM == "windows"
@@ -174,7 +167,7 @@ class N64EmuSetupApp:
         # ── Button Bar ──
         btn_frame = Frame(self.root, bg="#1a1a2e", padx=14, pady=10)
         btn_frame.grid(row=3, column=0, sticky="ew")
-        btn_frame.columnconfigure((0, 1, 2, 3, 4), weight=1)
+        btn_frame.columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
 
         self.btn_install = self._make_button(
             btn_frame, "⬇  Install Emulator", self.install_emulator_thread, 0
@@ -188,8 +181,11 @@ class N64EmuSetupApp:
         self.btn_open_roms = self._make_button(
             btn_frame, "📂  ROMs Folder", self.open_roms_folder, 3
         )
+        self.btn_zip = self._make_button(
+            btn_frame, "📦  Select ZIP", self.install_from_zip_thread, 4
+        )
         self.btn_clear = self._make_button(
-            btn_frame, "🧹  Clear Log", self.clear_log, 4
+            btn_frame, "🧹  Clear Log", self.clear_log, 5
         )
 
         # ── Progress Bar ──
@@ -301,6 +297,10 @@ class N64EmuSetupApp:
 
     # ── Install Emulator ──────────────────────────────────────────
 
+    # Direct download URL for Simple64 Windows (latest stable)
+    SIMPLE64_WIN_URL = "https://github.com/simple64/simple64/releases/download/v2024.12.1/simple64-win64-b49e10e.zip"
+    SIMPLE64_RELEASES_URL = "https://github.com/simple64/simple64/releases"
+
     def install_emulator_thread(self):
         thread = threading.Thread(target=self.install_emulator, daemon=True)
         thread.start()
@@ -309,41 +309,17 @@ class N64EmuSetupApp:
         self.show_progress()
         self.btn_install.configure(state=DISABLED)
         try:
-            print("\n── Installing Simple64 (Mupen64Plus) ──\n")
-
-            # Get latest release info from GitHub
-            print("  🔍  Fetching latest release info...")
-            req = urllib.request.Request(SIMPLE64_API, headers={
-                "User-Agent": "N64-Emu-Setup/1.0",
-                "Accept": "application/json"
-            })
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                release_data = json.loads(resp.read().decode())
-
-            version = release_data.get("tag_name", "latest")
-            print(f"  📦  Latest version: {version}")
-
-            # Find the right asset for this platform
-            assets = release_data.get("assets", [])
-            asset = self._find_platform_asset(assets)
-            if not asset:
-                print("  ❌  Could not find a download for your platform.")
-                print("       Visit: https://github.com/simple64/simple64/releases")
-                print("       And download the correct package manually.")
-                self.set_status("Download failed — no matching asset found.", "#ff6b6b")
-                return
-
-            download_url = asset["browser_download_url"]
-            filename = asset["name"]
-            print(f"  📥  Downloading: {filename}")
-            print(f"      From: {download_url}")
-            self.set_status(f"Downloading {filename}...", "#ffd700")
-
-            # Download
             EMULATOR_DIR.mkdir(parents=True, exist_ok=True)
+
+            print("\n── Installing Simple64 (Mupen64Plus) ──\n")
+            print(f"  📥  Downloading from GitHub...")
+            self.set_status("Downloading Simple64...", "#ffd700")
+
+            filename = self.SIMPLE64_WIN_URL.split("/")[-1]
             download_path = EMULATOR_DIR / filename
 
-            req = urllib.request.Request(download_url, headers={
+            # Download with progress
+            req = urllib.request.Request(self.SIMPLE64_WIN_URL, headers={
                 "User-Agent": "N64-Emu-Setup/1.0"
             })
             with urllib.request.urlopen(req, timeout=120) as response:
@@ -359,10 +335,12 @@ class N64EmuSetupApp:
                         downloaded += len(chunk)
                         if total > 0:
                             pct = int(downloaded * 100 / total)
-                            print(f"  📥  Progress: {pct}% ({downloaded//1024//1024}MB / {total//1024//1024}MB)", end="\r")
-            print(f"\n  ✅  Downloaded: {filename}")
+                            mb_dl = downloaded // 1024 // 1024
+                            mb_total = total // 1024 // 1024
+                            print(f"  📥  Progress: {pct}% ({mb_dl}MB / {mb_total}MB)", end="\r")
+            print(f"\n  ✅  Downloaded ({total // 1024 // 1024}MB)")
 
-            # Extract
+            # Extract the ZIP
             print("  📦  Extracting...")
             self.set_status("Extracting...", "#ffd700")
             extract_path = EMULATOR_DIR / "simple64"
@@ -370,45 +348,19 @@ class N64EmuSetupApp:
                 shutil.rmtree(extract_path)
             extract_path.mkdir(parents=True, exist_ok=True)
 
-            if filename.endswith(".zip"):
-                with zipfile.ZipFile(download_path, "r") as zf:
-                    zf.extractall(extract_path)
-            elif filename.endswith(".tar.gz") or filename.endswith(".tgz"):
-                with tarfile.open(download_path, "r:gz") as tf:
-                    tf.extractall(extract_path)
-            elif filename.endswith(".tar.xz"):
-                with tarfile.open(download_path, "r:xz") as tf:
-                    tf.extractall(extract_path)
-            elif filename.endswith(".AppImage"):
-                # Just move AppImage into the simple64 folder
-                shutil.move(str(download_path), str(extract_path / filename))
-                os.chmod(str(extract_path / filename), 0o755)
-            elif filename.endswith(".dmg"):
-                # On Mac, we'll mount the dmg
-                print("  ⚠  DMG detected. Opening for manual install...")
-                import subprocess
-                subprocess.run(["open", str(download_path)], check=False)
-                print("  💡  Please drag Simple64 to Applications, then come back.")
-                self.set_status("DMG opened — drag to Applications, then return.", "#ffd700")
-                self.btn_install.configure(state=NORMAL)
-                self.hide_progress()
-                return
+            with zipfile.ZipFile(download_path, "r") as zf:
+                zf.extractall(extract_path)
+            print("  ✅  Extracted")
 
-            # Find the executable
-            exe_name = "simple64.exe" if IS_WINDOWS else "simple64"
+            # Find simple64.exe
             exe_path = None
-            for found in extract_path.rglob(exe_name):
+            for found in extract_path.rglob("simple64.exe"):
                 exe_path = found
                 break
-
-            # Also look for m64p or other launchers
             if not exe_path:
-                for name in ["m64p", "simple64 gui", "Simple64"]:
-                    for found in extract_path.rglob(name):
-                        exe_path = found
-                        break
-                    if exe_path:
-                        break
+                for found in extract_path.rglob("*.exe"):
+                    exe_path = found
+                    break
 
             if exe_path:
                 self.settings["emulator_path"] = str(exe_path)
@@ -417,24 +369,21 @@ class N64EmuSetupApp:
                 print(f"  ✅  Emulator installed at: {exe_path}")
             else:
                 print(f"  ✅  Files extracted to: {extract_path}")
-                print("  💡  You may need to locate the executable manually.")
+                print("  💡  Open that folder and run simple64.exe")
                 self.settings["emulator_path"] = str(extract_path)
                 self.save_settings()
                 self.set_emu_installed(extract_path)
 
-            # Set up ROMs directory
             self._ensure_roms_dir()
-
             print(f"\n  ✅  Installation complete!")
             self.set_status("Installation complete! Ready to play.", "#00ff88")
 
         except urllib.error.HTTPError as e:
-            print(f"\n  ❌  HTTP Error: {e.code} — {e.reason}")
-            if e.code == 403:
-                print("  💡  GitHub API rate limited. Try again later, or")
-                print("       download manually from:")
-                print("       https://github.com/simple64/simple64/releases")
-            self.set_status(f"Download failed (HTTP {e.code})", "#ff6b6b")
+            print(f"\n  ❌  Download failed: HTTP {e.code}")
+            print(f"       Download manually from:")
+            print(f"       {self.SIMPLE64_RELEASES_URL}")
+            print(f"       Then use 'Select ZIP' button.")
+            self.set_status("Download failed. Try manual download.", "#ff6b6b")
         except Exception as e:
             print(f"\n  ❌  Error: {e}")
             self.set_status(f"Error: {e}", "#ff6b6b")
@@ -444,51 +393,84 @@ class N64EmuSetupApp:
             self.hide_progress()
             print()
 
-    def _find_platform_asset(self, assets):
-        """Find the best asset for the current platform."""
-        if IS_WINDOWS:
-            # Prefer portable .zip, then installer .exe
-            for a in assets:
-                name = a["name"].lower()
-                if "win" in name or "windows" in name:
-                    if name.endswith(".zip") and "portable" in name:
-                        return a
-            for a in assets:
-                name = a["name"].lower()
-                if "win" in name or "windows" in name:
-                    if name.endswith(".zip"):
-                        return a
-            for a in assets:
-                name = a["name"].lower()
-                if "win" in name or "windows" in name:
-                    if name.endswith(".exe"):
-                        return a
-            # Fallback: any .zip
-            for a in assets:
-                if a["name"].lower().endswith(".zip"):
-                    return a
-        elif IS_MAC:
-            for a in assets:
-                name = a["name"].lower()
-                if "mac" in name or "darwin" in name or "osx" in name or "apple" in name:
-                    return a
-            for a in assets:
-                if a["name"].lower().endswith(".dmg"):
-                    return a
-        elif IS_LINUX:
-            for a in assets:
-                name = a["name"].lower()
-                if "linux" in name or "ubuntu" in name:
-                    if name.endswith(".appimage"):
-                        return a
-            for a in assets:
-                name = a["name"].lower()
-                if "linux" in name or "ubuntu" in name:
-                    return a
-            for a in assets:
-                if a["name"].lower().endswith(".appimage"):
-                    return a
-        return None
+    def install_from_zip_thread(self):
+        thread = threading.Thread(target=self.install_from_zip, daemon=True)
+        thread.start()
+
+    def install_from_zip(self):
+        """Browse for a manually-downloaded Simple64 ZIP and install from it."""
+        filetypes = [
+            ("ZIP files", "*.zip"),
+            ("All files", "*.*")
+        ]
+        filename = filedialog.askopenfilename(
+            title="Select Simple64 ZIP file you downloaded",
+            initialdir=str(Path.home() / "Downloads"),
+            filetypes=filetypes
+        )
+        if not filename:
+            return
+
+        self.show_progress()
+        self.btn_install.configure(state=DISABLED)
+        try:
+            EMULATOR_DIR.mkdir(parents=True, exist_ok=True)
+            zip_path = Path(filename)
+
+            print(f"\n── Installing from ZIP: {zip_path.name} ──\n")
+
+            # Copy ZIP to emulator folder
+            dest_zip = EMULATOR_DIR / zip_path.name
+            if str(zip_path) != str(dest_zip):
+                print("  📋  Copying ZIP to emulator folder...")
+                shutil.copy2(str(zip_path), str(dest_zip))
+
+            # Extract
+            print("  📦  Extracting...")
+            self.set_status("Extracting...", "#ffd700")
+            extract_path = EMULATOR_DIR / "simple64"
+            if extract_path.exists():
+                shutil.rmtree(extract_path)
+            extract_path.mkdir(parents=True, exist_ok=True)
+
+            with zipfile.ZipFile(str(dest_zip), "r") as zf:
+                zf.extractall(str(extract_path))
+            print("  ✅  Extracted")
+
+            # Find simple64.exe
+            exe_path = None
+            for found in extract_path.rglob("simple64.exe"):
+                exe_path = found
+                break
+            if not exe_path:
+                for found in extract_path.rglob("*.exe"):
+                    exe_path = found
+                    break
+
+            if exe_path:
+                self.settings["emulator_path"] = str(exe_path)
+                self.save_settings()
+                self.set_emu_installed(exe_path)
+                print(f"  ✅  Emulator installed at: {exe_path}")
+            else:
+                print(f"  ✅  Files extracted to: {extract_path}")
+                print("  💡  Look for simple64.exe in there")
+                self.settings["emulator_path"] = str(extract_path)
+                self.save_settings()
+                self.set_emu_installed(extract_path)
+
+            self._ensure_roms_dir()
+            print(f"\n  ✅  Installation complete from ZIP!")
+            self.set_status("Installation complete! Ready to play.", "#00ff88")
+
+        except Exception as e:
+            print(f"\n  ❌  Error: {e}")
+            self.set_status(f"Error: {e}", "#ff6b6b")
+            log(f"EXCEPTION: {e}")
+        finally:
+            self.btn_install.configure(state=NORMAL)
+            self.hide_progress()
+            print()
 
     def _ensure_roms_dir(self):
         """Create ROM folders with nice structure."""

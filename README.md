@@ -52,10 +52,11 @@ cd N64-Emu-Setup
 python n64_emu_setup.py
 ```
 
-### 3. Click "Install Emulator"
+### 3. Click "Install Emulator" or "Select ZIP"
 
-The app will automatically download the latest Simple64 release and
-set everything up.
+**Install Emulator** — Downloads Simple64 directly from GitHub and sets it up automatically.  
+**Select ZIP** — If you already downloaded the Simple64 ZIP manually, use this button to
+browse for it and install from there.
 
 ### 4. Add your ROMs
 
@@ -112,7 +113,8 @@ from a game you own.
 
 | Button | What it does |
 |--------|-------------|
-| ⬇ **Install Emulator** | Downloads + installs Simple64 |
+| ⬇ **Install Emulator** | Downloads + installs Simple64 directly (no API) |
+| 📦 **Select ZIP** | Pick a Simple64 ZIP you downloaded manually |
 | ▶ **Launch Emulator** | Opens the emulator directly |
 | 📁 **Select ROM** | Pick a ROM file to play |
 | 📂 **ROMs Folder** | Opens the ROMs folder |
