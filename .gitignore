@@ -1,4 +1,7 @@
-# Emulator downloads
+# Local virtual environment (created by setup.bat)
+.venv/
+
+# Emulator downloads (created by the app)
 emulator/
 *.zip
 *.tar.gz

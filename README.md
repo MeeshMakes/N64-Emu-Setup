@@ -15,20 +15,28 @@ as fast as possible.
 - ✅ **Launch games** directly from the app
 - ✅ **Cross-platform** — Windows, macOS, Linux
 
-## 🚀 One-Click Install (Windows)
+## 🚀 One-Click Install (Windows — zero dependencies)
 
-**Open CMD and paste this single line:**
+**Open CMD as Administrator and paste this single line:**
 
 ```cmd
-powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/MeeshMakes/N64-Emu-Setup/master/setup_windows.ps1' -OutFile '%TEMP%\n64_setup.ps1'; Powershell -ExecutionPolicy Bypass -File '%TEMP%\n64_setup.ps1'}"
+powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/MeeshMakes/N64-Emu-Setup/master/setup.bat' -OutFile '%TEMP%\n64_setup.bat'; '%TEMP%\n64_setup.bat'}"
 ```
 
 That's it. This one command:
-1. ✅ **Checks/installs Python** automatically
-2. ✅ **Downloads** the full app
-3. ✅ **Generates a custom N64 desktop icon** 🎨
-4. ✅ **Creates a desktop shortcut** with the icon
-5. ✅ **Launches the app** for you
+1. ✅ **Checks for Python** — installs it automatically if missing
+2. ✅ **Creates a Python virtual environment** inside the app folder
+3. ✅ **Generates a custom N64 desktop icon** with controller + Triforce 🎨
+4. ✅ **Creates a desktop shortcut** with that icon
+5. ✅ **Sets up ROM folders** for Zelda OoT and Smash 64
+6. ✅ **Copies your Zelda ROM** from Downloads if found
+7. ✅ **Launches the app**
+
+### Alternative: Download the ZIP
+
+1. Go to [GitHub releases](https://github.com/MeeshMakes/N64-Emu-Setup)
+2. Download and extract the ZIP
+3. Double-click **`setup.bat`** inside the folder
 
 ## Manual Setup
 
