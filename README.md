@@ -15,7 +15,22 @@ as fast as possible.
 - ✅ **Launch games** directly from the app
 - ✅ **Cross-platform** — Windows, macOS, Linux
 
-## Quick Start
+## 🚀 One-Click Install (Windows)
+
+**Open CMD and paste this single line:**
+
+```cmd
+powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/MeeshMakes/N64-Emu-Setup/master/setup_windows.ps1' -OutFile '%TEMP%\n64_setup.ps1'; Powershell -ExecutionPolicy Bypass -File '%TEMP%\n64_setup.ps1'}"
+```
+
+That's it. This one command:
+1. ✅ **Checks/installs Python** automatically
+2. ✅ **Downloads** the full app
+3. ✅ **Generates a custom N64 desktop icon** 🎨
+4. ✅ **Creates a desktop shortcut** with the icon
+5. ✅ **Launches the app** for you
+
+## Manual Setup
 
 ### 1. Install Python 3.8+
 

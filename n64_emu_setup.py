@@ -35,6 +35,8 @@ EMULATOR_DIR = BASE_DIR / "emulator"
 ROMS_DIR = BASE_DIR / "roms"
 SETTINGS_FILE = BASE_DIR / "settings.json"
 LOG_FILE = BASE_DIR / "setup.log"
+ICON_FILE = BASE_DIR / "assets" / "n64_icon.ico"
+ICON_PNG = BASE_DIR / "assets" / "n64_icon.png"
 
 # GitHub release info for Simple64
 SIMPLE64_REPO = "simple64/simple64"
@@ -86,12 +88,8 @@ class N64EmuSetupApp:
         self.root.resizable(True, True)
         self.root.minsize(600, 500)
 
-        # Try to set icon
-        try:
-            if IS_WINDOWS:
-                self.root.iconbitmap(default="")
-        except Exception:
-            pass
+        # Set the custom N64 icon
+        self._set_app_icon()
 
         self.console_active = True
         self.settings = self.load_settings()
@@ -99,6 +97,22 @@ class N64EmuSetupApp:
         self._build_ui()
         self._log_initial()
         self.check_emulator_status()
+
+    # ── App Icon ──────────────────────────────────────────────────
+
+    def _set_app_icon(self):
+        """Set the window icon from the generated ICO/PNG."""
+        try:
+            if IS_WINDOWS and ICON_FILE.exists():
+                self.root.iconbitmap(default=str(ICON_FILE))
+            elif ICON_PNG.exists():
+                from PIL import Image, ImageTk
+                img = Image.open(ICON_PNG)
+                icon = ImageTk.PhotoImage(img)
+                self.root.iconphoto(True, icon)
+                self.root._icon_image = icon  # prevent GC
+        except Exception:
+            pass
 
     # ── UI Build ──────────────────────────────────────────────────
 
