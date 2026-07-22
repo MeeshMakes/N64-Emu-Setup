@@ -9,8 +9,6 @@ launch your N64 games with a clean console log.
 import os
 import sys
 import json
-import urllib.request
-import urllib.error
 import zipfile
 import subprocess
 import threading
@@ -298,83 +296,102 @@ class N64EmuSetupApp:
 
     # ── Install Emulator ──────────────────────────────────────────
 
+    SIMPLE64_ZIP_URL = "https://github.com/simple64/simple64/releases/download/v2024.12.1/simple64-win64-b49e10e.zip"
     SIMPLE64_RELEASES_URL = "https://github.com/simple64/simple64/releases"
-    SIMPLE64_WIN_URL = "https://github.com/simple64/simple64/releases/download/v2024.12.1/simple64-win64-b49e10e.zip"
+    SIMPLE64_ZIP_NAME = "simple64-win64-b49e10e.zip"
 
     def install_emulator_thread(self):
         thread = threading.Thread(target=self._install_flow, daemon=True)
         thread.start()
 
     def _install_flow(self):
-        """Popup → download (directly to emu folder) → extract → done."""
-        # ── 1. Ask user first ──
+        """Popup → open browser to download → watch Downloads → move → extract → done."""
+        # ── 1. Popup ──
         msg = (
-            "N64 Emu Setup needs to download Simple64.\n\n"
-            "File: simple64-win64-b49e10e.zip (46 MB)\n"
-            "From: github.com/simple64/simple64\n\n"
-            "The download goes straight into the emulator folder.\n"
-            "It will be extracted and set up automatically."
+            "Simple64 needs to be downloaded from GitHub.\n\n"
+            "I'll open your browser to download the ZIP.\n"
+            "Once it finishes downloading, I'll detect it\n"
+            "in your Downloads folder, move it here, and\n"
+            "extract it automatically."
         )
         answer = messagebox.askyesno(
             title="Download Simple64?",
             message=msg,
-            detail="Click Yes to download and install. Click No to open the releases page."
+            detail="Click Yes to open the download page. Click No to cancel."
         )
-
         if not answer:
-            # User said No — open the releases page
-            webbrowser.open(self.SIMPLE64_RELEASES_URL)
-            print("  🔗  Opened Simple64 releases page in your browser.")
-            print("  💡  Download the Windows ZIP, then use the 'Select ZIP' button.")
-            self.set_status("Browser opened. Download ZIP and use 'Select ZIP'.", "#ffd700")
             return
 
-        # ── 2. Download ──
-        self.show_progress()
+        print("\n── Installing Simple64 ──\n")
+        print("  🔗  Opening browser to download ZIP...")
+        self.set_status("Opening browser...", "#ffd700")
+        webbrowser.open(self.SIMPLE64_ZIP_URL)
+        print(f"  📄  File: {self.SIMPLE64_ZIP_NAME} (46 MB)")
+        print("  💡  Save it to your Downloads folder when prompted.")
+
+        # ── 2. Wait for the ZIP to appear in Downloads ──
         self.btn_install.configure(state=DISABLED)
+        self.set_status("Waiting for download...", "#ffd700")
+
+        download_dir = Path.home() / "Downloads"
+        zip_path = download_dir / self.SIMPLE64_ZIP_NAME
+        found = False
+
+        print(f"\n  👀  Watching: {download_dir}")
+        print(f"  👀  For file: {self.SIMPLE64_ZIP_NAME}")
+        print("  ⏳  Waiting for download to complete...")
+
+        # Check up to 5 minutes (30 tries × 10 seconds)
+        for attempt in range(30):
+            self.root.update()
+            if zip_path.exists() and zip_path.stat().st_size > 40000000:
+                found = True
+                break
+            # Also catch partial downloads — check if file exists and size is stable
+            if zip_path.exists():
+                size1 = zip_path.stat().st_size
+                threading.Event().wait(2)
+                if zip_path.exists():
+                    size2 = zip_path.stat().st_size
+                    if size1 == size2 and size1 > 40000000:
+                        found = True
+                        break
+            threading.Event().wait(8)
+
+        if not found:
+            print("  ❌  Download not detected after 5 minutes.")
+            print("  💡  Use the 'Select ZIP' button to locate it manually.")
+            self.set_status("Download not found. Use Select ZIP.", "#ff6b6b")
+            self.btn_install.configure(state=NORMAL)
+            return
+
+        print(f"  ✅  Found in Downloads!")
+        self.set_status("Moving and extracting...", "#ffd700")
+
+        # ── 3. Move the ZIP to emulator folder ──
         try:
             EMULATOR_DIR.mkdir(parents=True, exist_ok=True)
-            filename = self.SIMPLE64_WIN_URL.split("/")[-1]
-            zip_path = EMULATOR_DIR / filename
+            dest_zip = EMULATOR_DIR / self.SIMPLE64_ZIP_NAME
 
-            print("\n── Installing Simple64 ──\n")
-            print(f"  📥  Downloading 46 MB...")
-            self.set_status("Downloading...", "#ffd700")
+            print("  📋  Moving ZIP to emulator folder...")
+            # Remove old one if exists
+            if dest_zip.exists():
+                dest_zip.unlink()
+            shutil.move(str(zip_path), str(dest_zip))
+            print("  ✅  Moved")
 
-            req = urllib.request.Request(self.SIMPLE64_WIN_URL, headers={
-                "User-Agent": "N64-Emu-Setup/1.0"
-            })
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                total = int(resp.headers.get("Content-Length", 0))
-                downloaded = 0
-                chunk_size = 8192
-                with open(zip_path, "wb") as f:
-                    while True:
-                        chunk = resp.read(chunk_size)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total > 0:
-                            pct = int(downloaded * 100 / total)
-                            mb_dl = downloaded // 1024 // 1024
-                            mb_total = total // 1024 // 1024
-                            print(f"  📥  {pct}% ({mb_dl}MB / {mb_total}MB)", end="\r")
-            print(f"\n  ✅  Downloaded 46 MB")
-
-            # ── 3. Extract ──
+            # ── 4. Extract ──
             print("  📦  Extracting...")
-            self.set_status("Extracting...", "#ffd700")
             extract_path = EMULATOR_DIR / "simple64"
             if extract_path.exists():
                 shutil.rmtree(extract_path)
             extract_path.mkdir(parents=True, exist_ok=True)
 
-            with zipfile.ZipFile(zip_path, "r") as zf:
+            with zipfile.ZipFile(dest_zip, "r") as zf:
                 zf.extractall(extract_path)
             print("  ✅  Extracted")
 
-            # ── 4. Find exe ──
+            # ── 5. Find exe ──
             exe_path = None
             for found in extract_path.rglob("simple64.exe"):
                 exe_path = found
@@ -390,13 +407,13 @@ class N64EmuSetupApp:
                 self.set_emu_installed(exe_path)
                 print(f"  ✅  Found: {exe_path.name}")
             else:
-                print(f"  ✅  Extracted to: {extract_path}")
+                print(f"  ✅  Files in: {extract_path}")
                 self.settings["emulator_path"] = str(extract_path)
                 self.save_settings()
                 self.set_emu_installed(extract_path)
 
             self._ensure_roms_dir()
-            print(f"\n  ✅  All done! Launch the emulator or pick a ROM.")
+            print(f"\n  ✅  Done! Launch the emulator or pick a ROM.")
             self.set_status("Ready to play!", "#00ff88")
 
         except Exception as e:
@@ -405,8 +422,6 @@ class N64EmuSetupApp:
             log(f"EXCEPTION: {e}")
         finally:
             self.btn_install.configure(state=NORMAL)
-            self.hide_progress()
-            print()
 
     def install_from_zip_thread(self):
         thread = threading.Thread(target=self.install_from_zip, daemon=True)
