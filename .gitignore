@@ -1,0 +1,23 @@
+# Emulator downloads
+emulator/
+*.zip
+*.tar.gz
+*.tar.xz
+*.dmg
+*.AppImage
+
+# ROMs (not included)
+roms/
+
+# Settings & logs
+settings.json
+setup.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# VS Code
+.vscode/
