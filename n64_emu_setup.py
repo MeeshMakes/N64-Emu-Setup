@@ -258,14 +258,12 @@ class N64EmuSetupApp:
 
     def check_emulator_status(self):
         """Check if Simple64 is already installed somewhere."""
-        # Common install locations
         candidates = [
+            EMULATOR_DIR / "simple64" / "simple64-gui.exe",
+            EMULATOR_DIR / "simple64-gui.exe",
             EMULATOR_DIR / "simple64" / "simple64.exe",
-            EMULATOR_DIR / "simple64" / "simple64",
-            EMULATOR_DIR / "simple64.AppImage",
-            EMULATOR_DIR / "Simple64.app",
-            Path("C:/Program Files/simple64/simple64.exe"),
-            Path("C:/Program Files (x86)/simple64/simple64.exe"),
+            Path("C:/Program Files/simple64/simple64-gui.exe"),
+            Path("C:/Program Files (x86)/simple64/simple64-gui.exe"),
         ]
         if self.settings.get("emulator_path"):
             p = Path(self.settings["emulator_path"])
@@ -380,26 +378,52 @@ class N64EmuSetupApp:
             shutil.move(str(zip_path), str(dest_zip))
             print("  ✅  Moved")
 
-            # ── 4. Extract ──
+            # ── 4. Extract with nesting handling ──
             print("  📦  Extracting...")
+            import tempfile
+            tmp_dir = EMULATOR_DIR / "_tmp_extract"
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir)
+            tmp_dir.mkdir()
+
+            with zipfile.ZipFile(dest_zip, "r") as zf:
+                zf.extractall(tmp_dir)
+
             extract_path = EMULATOR_DIR / "simple64"
             if extract_path.exists():
                 shutil.rmtree(extract_path)
-            extract_path.mkdir(parents=True, exist_ok=True)
+            extract_path.mkdir()
 
-            with zipfile.ZipFile(dest_zip, "r") as zf:
-                zf.extractall(extract_path)
+            contents = list(tmp_dir.iterdir())
+            if len(contents) == 1 and contents[0].is_dir():
+                for item in contents[0].iterdir():
+                    dest = extract_path / item.name
+                    if dest.exists():
+                        if dest.is_dir():
+                            shutil.rmtree(dest)
+                        else:
+                            dest.unlink()
+                    shutil.move(str(item), str(dest))
+            else:
+                for item in contents:
+                    shutil.move(str(item), str(extract_path / item.name))
+            shutil.rmtree(tmp_dir)
             print("  ✅  Extracted")
 
-            # ── 5. Find exe ──
+            # ── 5. Find executable ──
             exe_path = None
-            for found in extract_path.rglob("simple64.exe"):
-                exe_path = found
-                break
-            if not exe_path:
-                for found in extract_path.rglob("*.exe"):
+            for name in ["simple64-gui.exe", "simple64.exe"]:
+                for found in extract_path.rglob(name):
                     exe_path = found
                     break
+                if exe_path:
+                    break
+            if not exe_path:
+                for found in extract_path.rglob("*.exe"):
+                    fn = found.name.lower()
+                    if fn != "7za.exe" and "uninstall" not in fn:
+                        exe_path = found
+                        break
 
             if exe_path:
                 self.settings["emulator_path"] = str(exe_path)
@@ -455,27 +479,53 @@ class N64EmuSetupApp:
                 print("  📋  Copying ZIP to emulator folder...")
                 shutil.copy2(str(zip_path), str(dest_zip))
 
-            # Extract
+            # Extract with nesting handling
             print("  📦  Extracting...")
             self.set_status("Extracting...", "#ffd700")
+            import tempfile
+            tmp_dir = EMULATOR_DIR / "_tmp_extract"
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir)
+            tmp_dir.mkdir()
+
+            with zipfile.ZipFile(str(dest_zip), "r") as zf:
+                zf.extractall(str(tmp_dir))
+
             extract_path = EMULATOR_DIR / "simple64"
             if extract_path.exists():
                 shutil.rmtree(extract_path)
-            extract_path.mkdir(parents=True, exist_ok=True)
+            extract_path.mkdir()
 
-            with zipfile.ZipFile(str(dest_zip), "r") as zf:
-                zf.extractall(str(extract_path))
+            contents = list(tmp_dir.iterdir())
+            if len(contents) == 1 and contents[0].is_dir():
+                for item in contents[0].iterdir():
+                    dest = extract_path / item.name
+                    if dest.exists():
+                        if dest.is_dir():
+                            shutil.rmtree(dest)
+                        else:
+                            dest.unlink()
+                    shutil.move(str(item), str(dest))
+            else:
+                for item in contents:
+                    shutil.move(str(item), str(extract_path / item.name))
+            shutil.rmtree(tmp_dir)
             print("  ✅  Extracted")
 
-            # Find simple64.exe
+            # Find executable
             exe_path = None
-            for found in extract_path.rglob("simple64.exe"):
-                exe_path = found
-                break
-            if not exe_path:
-                for found in extract_path.rglob("*.exe"):
+            for name in ["simple64-gui.exe", "simple64.exe"]:
+                for found in extract_path.rglob(name):
                     exe_path = found
                     break
+                if exe_path:
+                    break
+            if not exe_path:
+                for found in extract_path.rglob("*.exe"):
+                    fn = found.name.lower()
+                    if fn != "7za.exe" and "uninstall" not in fn:
+                        exe_path = found
+                        break
 
             if exe_path:
                 self.settings["emulator_path"] = str(exe_path)
